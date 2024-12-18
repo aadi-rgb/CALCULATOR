@@ -1,0 +1,200 @@
+import sys
+
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTextEdit, QLineEdit, QLabel, QPushButton, QVBoxLayout, \
+QHBoxLayout, QGridLayout, QWidget, QMessageBox
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
+
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+import scipy
+import numpy as np
+import sympy as sym
+
+
+class CalculatorWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        # Set window properties
+        self.setWindowTitle("Function Calculator")
+        self.setGeometry(100, 100, 500, 500)
+        self.setStyleSheet("background-color: #555, color: black")
+
+        # Create input field
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Enter a function to plot")
+        self.input_field.setStyleSheet("background-color: #777; color: white; border: none; font-size: 20px")
+
+        # Create plot button
+        self.plot_button = QPushButton("Plot")
+        self.plot_button.clicked.connect(self.plot)
+        self.plot_button.setStyleSheet(
+            "background-color: #555; color: white; border: none; font-size: 20px; padding: 10px")
+
+        # Create output field
+        self.output_field = QTextEdit()
+        self.output_field.setReadOnly(True)
+        self.output_field.setStyleSheet("background-color: #777; color: white; border: none; font-size: 16px")
+
+        # Create figure and canvas to display plot
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+
+        # Create solve button
+        self.solve_button = QPushButton("Solve")
+        self.solve_button.clicked.connect(self.solve)
+        self.solve_button.setStyleSheet(
+            "background-color: #555; color: white; border: none; font-size: 20px; padding: 10px")
+
+
+        # Create keyboard layout
+        keyboard_layout = QGridLayout()
+        keyboard_layout.setContentsMargins(10, 10, 10, 10)
+        keyboard_layout.setSpacing(10)
+
+        # Add buttons to keyboard layout
+        button_font = QFont()
+        button_font.setPointSize(10)
+
+        button_names = [
+            'sin', 'cos', 'tan', 'pi',
+            'asin', 'asin', 'atan', 'e',
+            'ln', 'log', '1/x', 'sqrt',
+            'x^2', 'x^3', 'x^y', '+/-',
+            '7', '8', '9', '/',
+            '4', '5', '6', '*',
+            '1', '2', '3', '-',
+            '0', '.', 'C', '+',
+            '(', ')', '=',
+        ]
+
+        button_grid = {}
+        for row, button_name in enumerate(button_names):
+            button = QPushButton(button_name)
+            button.setFont(button_font)
+            button.setStyleSheet("background-color: #555; color: white; border: none; padding: 10px")
+            button.clicked.connect(self.button_clicked)
+            keyboard_layout.addWidget(button, row // 4, row % 4)
+            button_grid[button_name] = button
+
+        # Set custom style for buttons
+        self.setStyleSheet("""
+            QPushButton {
+                border-radius: 10px;
+            }
+        """)
+
+
+
+        # Plot place
+        self.grid = QGridLayout()
+
+        # Create main layout
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+
+        # Add widgets to main layout
+        main_layout.addWidget(self.input_field)
+        main_layout.addWidget(self.plot_button)
+        main_layout.addWidget(self.output_field)
+        main_layout.addWidget(self.canvas)
+        main_layout.addLayout(self.grid)
+        main_layout.addLayout(keyboard_layout)
+        main_layout.addWidget(self.solve_button)
+
+        # Set main layout as central widget
+        central_widget = QWidget()
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
+
+    def button_clicked(self):
+        # Get button that was clicked
+        button = self.sender()
+        button_text = button.text()
+
+        # Update input field based on button clicked
+        current_text = self.input_field.text()
+        if button_text == '=':
+            # Solve equation and display result
+            self.solve()
+        elif button_text == 'C':
+            # Clear input field
+            self.input_field.clear()
+        elif button_text in ['sin', 'cos', 'tan','ln', 'log', 'sqrt']:
+            # Add function to input field
+            self.input_field.setText(current_text + button_text + '(' )
+        elif button_text in ['+', '-', '*', '/']:
+            # Add operator to input field
+            self.input_field.setText(current_text + ' ' + button_text + ' ')
+        elif button_text == '1/x':
+            self.input_field.setText('1'+'/'+current_text)
+        elif button_text == 'x^2':
+            self.input_field.setText(current_text + '^' + '2')
+        elif button_text == 'x^3':
+            self.input_field.setText(current_text + '^' + '3')
+        elif button_text == 'x^y':
+            self.input_field.setText(current_text + '^')
+        elif button_text == '+/-':
+            self.input_field.setText('-' + current_text)
+        else:
+            # Add digit or constant to input field
+            self.input_field.setText(current_text + button_text)
+
+
+
+
+    def solve(self):
+        # Get expression from input field
+        expression = self.input_field.text()
+
+        # Clear output field
+        self.output_field.clear()
+
+        # Try to evaluate expression using sympy
+        try:
+            # Parse expression using sympy
+            x = sym.symbols('x')
+            expr = sym.sympify(expression)
+
+            # Evaluate expression
+            result = expr.evalf()
+
+            # Display result in output field
+            self.output_field.append("Result: {}".format(result))
+        except Exception as e:
+            # Display error message in output field
+            self.output_field.append("Error: {}".format(e))
+
+    def plot(self):
+        # Get the function from the input field
+        try:
+            func = sym.sympify(self.input_field.text())
+        except sym.SympifyError:
+            QMessageBox.warning(self, 'Invalid input', 'Please enter a valid function')
+            return
+
+        # Define the variables and the range for the plot
+        x = sym.Symbol('x')
+        start, end = -1000, 1000
+
+
+
+        # Evaluate the function and plot it
+        plt.plot([func.evalf(subs={x: i}) for i in np.linspace(start, end, 100)])
+        plt.grid(True)
+        plt.axhline(0, color='black')
+        plt.axvline(0, color='black')
+        plt.show()
+
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = CalculatorWindow()
+    window.show()
+    sys.exit(app.exec_())
